@@ -11,11 +11,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
 from smtp import send_email
+from minioClient import MinioClient
+
+minio = MinioClient()
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
-
 
 origins = ["*"]
 
@@ -26,6 +28,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # Dependency
 def get_db():
@@ -189,25 +192,50 @@ async def set_avatar(
     if db_user.status:
         raise HTTPException(status_code=400, detail="User already activated")
 
-    return {"filename": image.filename}
+    content_type = image.headers.get('content-type')
+    if content_type not in ['image/jpeg', 'image/png']:
+        raise HTTPException(
+            status_code=400,
+            detail="Incorrect format",
+        )
+
+    minio.save_image_bytes("avatars", f"{db_user.id}.png", image.read(), image.size, content_type)
+    url = minio.get_url("avatars", f"{db_user.id}.png")
+
+    return {"image": url}
 
 
 @app.post("/change-avatar/", status_code=200)
-async def set_avatar(
+async def change_avatar(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
         image: UploadFile
 ):
     token = await check_token(db, auth)
 
-    extension = image.headers.get('content-type')
-    if extension not in ['image/jpeg', 'image/png']:
+    content_type = image.headers.get('content-type')
+    if content_type not in ['image/jpeg', 'image/png']:
         raise HTTPException(
             status_code=400,
             detail="Incorrect format",
         )
 
-    return {"filename": image.filename}
+    minio.save_image_bytes("avatars", f"{token.user}.png", image.read(), image.size, content_type)
+    url = minio.get_url("avatars", f"{token.user}.png")
+
+    return {"image": url}
+
+
+@app.get("/get-avatar/", status_code=200)
+async def get_avatar(
+        auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
+        db: Annotated[Session, Depends(get_db)],
+):
+    token = await check_token(db, auth)
+
+    url = minio.get_url("avatars", f"{token.user}.png")
+
+    return {"image": url}
 
 
 @app.get("/user/{user_id}", status_code=200, response_model=schemas.UserBase)
