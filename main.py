@@ -44,7 +44,7 @@ def get_db():
 get_bearer_token = HTTPBearer()
 
 
-@app.post("/signup/", status_code=201)
+@app.post("/signup/", status_code=201, tags=["signup"])
 async def signup(
         user: schemas.UserCreate,
         db: Annotated[Session, Depends(get_db)],
@@ -87,7 +87,7 @@ async def signup(
     }
 
 
-@app.post("/signup/confirm", status_code=201)
+@app.post("/signup/confirm", status_code=201, tags=["signup"])
 async def check_code(
         o: schemas.CheckCode,
         db: Annotated[Session, Depends(get_db)],
@@ -129,7 +129,7 @@ async def check_code(
     return result
 
 
-@app.post("/login/", status_code=201)
+@app.post("/login/", status_code=201, tags=["signup"])
 async def login(
         user: schemas.UserLogin,
         db: Annotated[Session, Depends(get_db)],
@@ -181,7 +181,7 @@ async def logout(
     return {"status": "ok"}
 
 
-@app.post("/set-avatar/{user_id}", status_code=200)
+@app.post("/set-avatar/{user_id}", status_code=200, tags=["signup"])
 async def set_avatar(
         db: Annotated[Session, Depends(get_db)],
         user_id: str,
@@ -210,7 +210,7 @@ async def set_avatar(
     return {"image": url}
 
 
-@app.post("/change-avatar/", status_code=200, tags=['avatar'])
+@app.post("/change-avatar/", status_code=200, tags=["user_info"])
 async def change_avatar(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
@@ -235,7 +235,7 @@ async def change_avatar(
     return {"image": url}
 
 
-@app.get("/get-avatar/", status_code=200)
+@app.get("/get-avatar/", status_code=200, tags=["user_info"])
 async def get_avatar(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
@@ -247,7 +247,7 @@ async def get_avatar(
     return {"image": url}
 
 
-@app.get("/user/{user_id}", status_code=200, response_model=schemas.UserBase)
+@app.get("/user/{user_id}", status_code=200, response_model=schemas.UserBase, tags=["user_info"])
 async def get_user(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
@@ -262,7 +262,7 @@ async def get_user(
     return user
 
 
-@app.post("/forgot-password/request", status_code=200)
+@app.post("/forgot-password/request", status_code=200, tags=["forgot_password"])
 async def forgot_password_request(
         o: schemas.ForgotPasswordRequest,
         db: Annotated[Session, Depends(get_db)],
@@ -295,7 +295,7 @@ async def forgot_password_request(
     }
 
 
-@app.post("/forgot-password/confirm", status_code=200)
+@app.post("/forgot-password/confirm", status_code=200, tags=["forgot_password"])
 async def forgot_password_request(
         o: schemas.ForgotPasswordCheckCode,
         db: Annotated[Session, Depends(get_db)],
@@ -332,7 +332,7 @@ async def forgot_password_request(
     }
 
 
-@app.post("/forgot-password/set", status_code=200)
+@app.post("/forgot-password/set", status_code=200, tags=["forgot_password"])
 async def forgot_password_request(
         o: schemas.ForgotPasswordSet,
         db: Annotated[Session, Depends(get_db)],
