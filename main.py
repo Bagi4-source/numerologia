@@ -218,7 +218,7 @@ async def set_avatar(
     if not src:
         src = minio.get_url("avatars", f"user.png")
 
-    return {"image": src}
+    return {"avatar": src}
 
 
 @app.post("/change-avatar/", status_code=200, tags=["user_info"])
@@ -245,7 +245,7 @@ async def change_avatar(
     if not src:
         src = minio.get_url("avatars", f"user.png")
 
-    return {"image": src}
+    return {"avatar": src}
 
 
 @app.get("/get-avatar/", status_code=200, tags=["user_info"])
@@ -259,18 +259,17 @@ async def get_avatar(
     if not src:
         src = minio.get_url("avatars", f"user.png")
 
-    return {"image": src}
+    return {"avatar": src}
 
 
-@app.get("/user/{user_id}", status_code=200, response_model=schemas.UserResult, tags=["user_info"])
-async def get_user(
+@app.get("/get-me/", status_code=200, response_model=schemas.UserResult, tags=["user_info"])
+async def get_me(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
-        db: Annotated[Session, Depends(get_db)],
-        user_id: str
+        db: Annotated[Session, Depends(get_db)]
 ):
     token = await check_token(db, auth)
 
-    user = crud.get_user_by_id(db=db, user_id=user_id)
+    user = crud.get_user_by_id(db=db, user_id=token.user)
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
 
@@ -353,9 +352,8 @@ async def forgot_password_request(
     request_id = request.id
 
     return {
-        "status": "ok",
         "request_id": request_id,
-        "command": "forgot-check-code"
+        "command": "forgot-password-set"
     }
 
 
@@ -380,5 +378,6 @@ async def forgot_password_request(
     crud.user_update_password(db=db, user=db_user, password=password)
 
     return {
-        "status": "ok"
+        "status": "ok",
+        "command": "login"
     }
