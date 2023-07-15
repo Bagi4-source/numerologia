@@ -15,6 +15,9 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000
     ports:
       - "8009:8000"
+    depends_on:
+      - postgres
+      - minio
   minio:
     image: minio/minio:latest
     command: server --console-address ":9001" /data/
