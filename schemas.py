@@ -49,7 +49,19 @@ class UserBase(BaseModel):
     name: str
     email: str
     country: str
+    avatar: Optional[str] = None
     token: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class UserResult(BaseModel):
+    id: str
+    name: str
+    email: str
+    country: str
+    avatar: Optional[str] = None
 
     class Config:
         from_attributes = True

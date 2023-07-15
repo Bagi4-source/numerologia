@@ -20,7 +20,6 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-
 origins = ["*"]
 
 app.add_middleware(
@@ -119,11 +118,16 @@ async def check_code(
     if not token:
         raise HTTPException(status_code=500, detail="Create token error")
 
+    src = minio.get_url("avatars", f"{token.user}.png")
+    if not src:
+        src = minio.get_url("avatars", f"user.png")
+
     result = schemas.UserBase(
         id=user.id,
         name=user.name,
         email=user.email,
         country=user.country,
+        avatar=src,
         token=token.token
     )
     return result
@@ -146,11 +150,16 @@ async def login(
     if not token:
         raise HTTPException(status_code=500, detail="Create token error")
 
+    src = minio.get_url("avatars", f"{token.user}.png")
+    if not src:
+        src = minio.get_url("avatars", f"user.png")
+
     result = schemas.UserBase(
         id=db_user.id,
         name=db_user.name,
         email=db_user.email,
         country=db_user.country,
+        avatar=src,
         token=token.token
     )
     return result
@@ -205,9 +214,11 @@ async def set_avatar(
     data.seek(0)
 
     minio.save_image_bytes("avatars", f"{db_user.id}.png", data, image.size, content_type)
-    url = minio.get_url("avatars", f"{db_user.id}.png")
+    src = minio.get_url("avatars", f"{db_user.id}.png")
+    if not src:
+        src = minio.get_url("avatars", f"user.png")
 
-    return {"image": url}
+    return {"image": src}
 
 
 @app.post("/change-avatar/", status_code=200, tags=["user_info"])
@@ -230,9 +241,11 @@ async def change_avatar(
     data.seek(0)
 
     minio.save_image_bytes("avatars", f"{token.user}.png", data, image.size, content_type)
-    url = minio.get_url("avatars", f"{token.user}.png")
+    src = minio.get_url("avatars", f"{token.user}.png")
+    if not src:
+        src = minio.get_url("avatars", f"user.png")
 
-    return {"image": url}
+    return {"image": src}
 
 
 @app.get("/get-avatar/", status_code=200, tags=["user_info"])
@@ -242,9 +255,11 @@ async def get_avatar(
 ):
     token = await check_token(db, auth)
 
-    url = minio.get_url("avatars", f"{token.user}.png")
+    src = minio.get_url("avatars", f"{token.user}.png")
+    if not src:
+        src = minio.get_url("avatars", f"user.png")
 
-    return {"image": url}
+    return {"image": src}
 
 
 @app.get("/user/{user_id}", status_code=200, response_model=schemas.UserBase, tags=["user_info"])
@@ -259,7 +274,19 @@ async def get_user(
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
 
-    return user
+    src = minio.get_url("avatars", f"{token.user}.png")
+    if not src:
+        src = minio.get_url("avatars", f"user.png")
+
+    result = schemas.UserResult(
+        id=user.id,
+        name=user.name,
+        email=user.email,
+        country=user.country,
+        avatar=src
+    )
+
+    return result
 
 
 @app.post("/forgot-password/request", status_code=200, tags=["forgot_password"])
