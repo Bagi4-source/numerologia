@@ -199,7 +199,7 @@ async def set_avatar(
             detail="Incorrect format",
         )
 
-    minio.save_image_bytes("avatars", f"{db_user.id}.png", image.read(), image.size, content_type)
+    minio.save_image_bytes("avatars", f"{db_user.id}.png", await image.read(), image.size, content_type)
     url = minio.get_url("avatars", f"{db_user.id}.png")
 
     return {"image": url}
@@ -220,7 +220,7 @@ async def change_avatar(
             detail="Incorrect format",
         )
 
-    minio.save_image_bytes("avatars", f"{token.user}.png", image.read(), image.size, content_type)
+    minio.save_image_bytes("avatars", f"{token.user}.png", await image.read(), image.size, content_type)
     url = minio.get_url("avatars", f"{token.user}.png")
 
     return {"image": url}
