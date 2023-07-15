@@ -99,8 +99,6 @@ async def check_code(
     db.commit()
     db.refresh(user)
 
-    crud.remove_code(db, codeObj)
-
     token = crud.create_token(db=db, user_id=user.id)
     if not token:
         raise HTTPException(status_code=500, detail="Create token error")
@@ -167,7 +165,23 @@ async def logout(
     return {"status": "ok"}
 
 
-@app.post("/set-avatar/", status_code=200)
+@app.post("/set-avatar/{user_id}", status_code=200)
+async def set_avatar(
+        db: Annotated[Session, Depends(get_db)],
+        user_id: str,
+        image: UploadFile
+):
+    db_user = crud.get_user_by_id(db, user_id=user_id)
+    if not db_user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    if db_user.status:
+        raise HTTPException(status_code=400, detail="User already activated")
+
+    return {"filename": image.filename}
+
+
+@app.post("/change-avatar/", status_code=200)
 async def set_avatar(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
@@ -185,15 +199,15 @@ async def set_avatar(
     return {"filename": image.filename}
 
 
-@app.get("/user/{id}", status_code=200, response_model=schemas.UserBase)
+@app.get("/user/{user_id}", status_code=200, response_model=schemas.UserBase)
 async def get_user(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
-        id: str
+        user_id: str
 ):
     token = await check_token(db, auth)
 
-    user = crud.get_user_by_id(db=db, user_id=id)
+    user = crud.get_user_by_id(db=db, user_id=user_id)
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
 
@@ -286,6 +300,7 @@ async def forgot_password_request(
     request = crud.get_request(db=db, request_id=request_id, user_id=db_user.id)
     if not request:
         raise HTTPException(status_code=400, detail="Request not found")
+    crud.remove_request(db=db, request=request)
 
     crud.user_update_password(db=db, user=db_user, password=password)
 

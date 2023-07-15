@@ -62,11 +62,17 @@ def remove_token(db: Session, token: models.Token):
 
 
 def get_user_by_email(db: Session, email: str):
-    return db.query(models.User).filter(models.User.email == email).first()
+    try:
+        return db.query(models.User).filter(models.User.email == email).first()
+    except:
+        return
 
 
-def get_user_by_id(db: Session, user_id: int):
-    return db.query(models.User).filter(models.User.id == user_id).first()
+def get_user_by_id(db: Session, user_id: str):
+    try:
+        return db.query(models.User).filter(models.User.id == user_id).first()
+    except:
+        return
 
 
 def user_remove_tokens(db: Session, user: models.User):
@@ -123,7 +129,10 @@ def verify_code(db: Session, codeObj: models.Code, code: str):
         db.refresh(codeObj)
     else:
         remove_code(db, codeObj)
-    return code == str(codeObj.code)
+    result = code == str(codeObj.code)
+    if result:
+        remove_code(db, codeObj)
+    return result
 
 
 def get_code(db: Session, user_id, step: str):
@@ -156,3 +165,11 @@ def create_request(db: Session, step: str, user_id):
 def get_request(db: Session, request_id, user_id):
     return db.query(models.Request).filter(models.Request.id == request_id and models.Request.user == user_id).order_by(
         models.Request.id.desc()).first()
+
+
+def remove_request(db: Session, request: models.Request):
+    try:
+        db.delete(request)
+        db.commit()
+    except:
+        return
