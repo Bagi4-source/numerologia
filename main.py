@@ -262,7 +262,7 @@ async def get_avatar(
     return {"image": src}
 
 
-@app.get("/user/{user_id}", status_code=200, response_model=schemas.UserBase, tags=["user_info"])
+@app.get("/user/{user_id}", status_code=200, response_model=schemas.UserResult, tags=["user_info"])
 async def get_user(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
