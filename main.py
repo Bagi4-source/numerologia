@@ -210,7 +210,7 @@ async def set_avatar(
     return {"image": url}
 
 
-@app.post("/change-avatar/", status_code=200)
+@app.post("/change-avatar/", status_code=200, tags=['avatar'])
 async def change_avatar(
         auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
         db: Annotated[Session, Depends(get_db)],
