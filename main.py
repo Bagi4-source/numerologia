@@ -1,4 +1,5 @@
 import datetime
+from io import BytesIO
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Form, UploadFile, File
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ minio = MinioClient()
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
+
 
 origins = ["*"]
 
@@ -198,8 +200,11 @@ async def set_avatar(
             status_code=400,
             detail="Incorrect format",
         )
+    data = BytesIO()
+    data.write(await image.read())
+    data.seek(0)
 
-    minio.save_image_bytes("avatars", f"{db_user.id}.png", await image.read(), image.size, content_type)
+    minio.save_image_bytes("avatars", f"{db_user.id}.png", data, image.size, content_type)
     url = minio.get_url("avatars", f"{db_user.id}.png")
 
     return {"image": url}
@@ -220,7 +225,11 @@ async def change_avatar(
             detail="Incorrect format",
         )
 
-    minio.save_image_bytes("avatars", f"{token.user}.png", await image.read(), image.size, content_type)
+    data = BytesIO()
+    data.write(await image.read())
+    data.seek(0)
+
+    minio.save_image_bytes("avatars", f"{token.user}.png", data, image.size, content_type)
     url = minio.get_url("avatars", f"{token.user}.png")
 
     return {"image": url}
