@@ -12,7 +12,6 @@ class User(Base):
     name = Column(String)
     email = Column(String, unique=True, index=True)
     password = Column(String)
-    country = Column(String)
     status = Column(Boolean, default=False)
     created_on = Column(DateTime, default=datetime.datetime.now)
     last_updated = Column(DateTime, onupdate=datetime.datetime.now)
@@ -43,3 +42,35 @@ class Request(Base):
     id = Column(UUID(as_uuid=False), primary_key=True, index=True, default=uuid4)
     step = Column(String)
     user = Column(UUID, ForeignKey("users.id", ondelete="cascade"))
+
+
+class FaQ(Base):
+    __tablename__ = "faQ"
+
+    id = Column(Integer, primary_key=True)
+    question_en = Column(String)
+    question_it = Column(String)
+    answer_en = Column(String)
+    answer_it = Column(String)
+
+
+class Videos(Base):
+    __tablename__ = "videos"
+
+    id = Column(Integer, primary_key=True)
+    preview = Column(String)
+    title_en = Column(String)
+    title_it = Column(String)
+    description_en = Column(String)
+    description_it = Column(String)
+    link = Column(String)
+
+
+class Numbers(Base):
+    __tablename__ = "numbers"
+
+    id = Column(Integer, primary_key=True)
+    number = Column(Integer, unique=True)
+    description_en = Column(String)
+    description_it = Column(String)
+

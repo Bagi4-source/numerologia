@@ -1,6 +1,7 @@
+import datetime
 import hashlib
 import random
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 import models
 import schemas
 
@@ -19,12 +20,19 @@ def create_user(db: Session, user: schemas.UserCreate):
             name=user.name,
             email=user.email,
             password=str(hashed_password(user.password)),
-            country=user.country
         )
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
         return db_user
+    except:
+        return
+
+
+def delete_user(db: Session, user: models.User):
+    try:
+        db.delete(user)
+        db.commit()
     except:
         return
 
@@ -82,18 +90,32 @@ def user_remove_tokens(db: Session, user: models.User):
 
 
 def user_update_password(db: Session, user: models.User, password: str):
-    user.password = str(hashed_password(password))
-    db.commit()
-    db.refresh(user)
-    user_remove_tokens(db, user)
+    try:
+        user.password = str(hashed_password(password))
+        db.commit()
+        db.refresh(user)
+        user_remove_tokens(db, user)
+    except:
+        return
+
+
+def user_update_name(db: Session, user: models.User, name: str):
+    try:
+        user.name = name
+        db.commit()
+        db.refresh(user)
+    except:
+        return
 
 
 def user_update_email(db: Session, user: models.User, email: str):
-    user.email = email
-    db.commit()
-    db.refresh(user)
-    user_remove_tokens(db, user)
-    return user
+    try:
+        user.email = email
+        db.commit()
+        db.refresh(user)
+        user_remove_tokens(db, user)
+    except:
+        return
 
 
 def create_code(db: Session, user_id, step: str):
@@ -173,3 +195,69 @@ def remove_request(db: Session, request: models.Request):
         db.commit()
     except:
         return
+
+
+def get_videos(db: Session, offset: int, limit: int, lang: str = "en"):
+    if lang == "en":
+        return db.query(models.Videos.id).count(), db.query(
+            models.Videos.id,
+            models.Videos.preview,
+            models.Videos.title_en.label('title'),
+            models.Videos.description_en.label('description'),
+            models.Videos.link
+        ).offset(offset).limit(limit)
+    return db.query(models.Videos.id).count(), db.query(
+        models.Videos.id,
+        models.Videos.preview,
+        models.Videos.title_it.label('title'),
+        models.Videos.description_it.label('description'),
+        models.Videos.link
+    ).offset(offset).limit(limit)
+
+
+def get_questions(db: Session, offset: int, limit: int, lang: str = "en"):
+    if lang == "en":
+        return db.query(models.FaQ).count(), db.query(
+            models.FaQ.id,
+            models.FaQ.question_en.label('question')
+        ).offset(offset).limit(limit)
+    return db.query(models.FaQ).count(), db.query(
+        models.FaQ.id,
+        models.FaQ.question_it.label('question')
+    ).offset(offset).limit(limit)
+
+
+def get_question_by_id(db: Session, faq_id: int, lang: str = "en"):
+    if lang == "en":
+        return db.query(
+            models.FaQ.id,
+            models.FaQ.question_en.label('question'),
+            models.FaQ.answer_en.label('answer'),
+        ).filter(models.FaQ.id == faq_id).first()
+    return db.query(
+        models.FaQ.id,
+        models.FaQ.question_it.label('question'),
+        models.FaQ.answer_it.label('answer'),
+    ).filter(models.FaQ.id == faq_id).first()
+
+
+def _sum_of_digits(x: int):
+    result = 0
+    for i in str(x):
+        result += int(i)
+    return result
+
+
+def get_number(db: Session, date: datetime.datetime, lang: str = "en"):
+    number = _sum_of_digits(date.day)
+    if lang == "en":
+        return db.query(
+            models.Numbers.id,
+            models.Numbers.number,
+            models.Numbers.description_en.label('description'),
+        ).filter(models.Numbers.number == number).first()
+    return db.query(
+        models.Numbers.id,
+        models.Numbers.number,
+        models.Numbers.description_it.label('description'),
+    ).filter(models.Numbers.number == number).first()

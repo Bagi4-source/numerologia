@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, Form, UploadFile, File
 from sqlalchemy.orm import Session
 import crud
 import models
+from router import api_router
 import schemas
 from database import SessionLocal, engine
 from fastapi.security.http import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,6 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
 from smtp import send_email
 from minioClient import MinioClient
+import re
+from starlette.requests import Request
 
 minio = MinioClient()
 
@@ -40,6 +43,30 @@ def get_db():
         db.close()
 
 
+def password_check(passwd):
+    if len(passwd) < 6:
+        raise HTTPException(status_code=400, detail="Password length should be at least 6")
+
+    # if not any(char.isdigit() for char in passwd):
+    #     print('Password should have at least one numeral')
+    #     val = False
+    #
+    # if not any(char.isupper() for char in passwd):
+    #     print('Password should have at least one uppercase letter')
+    #     val = False
+    #
+    # if not any(char.islower() for char in passwd):
+    #     print('Password should have at least one lowercase letter')
+    #     val = False
+    #
+    # if not any(char in SpecialSym for char in passwd):
+    #     print('Password should have at least one of the symbols $@#')
+    #     val = False
+    # if val:
+    #     return val
+    return True
+
+
 get_bearer_token = HTTPBearer()
 
 
@@ -48,6 +75,11 @@ async def signup(
         user: schemas.UserCreate,
         db: Annotated[Session, Depends(get_db)],
 ):
+    if not re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', user.email):
+        raise HTTPException(status_code=400, detail="Invalid email")
+
+    password_check(user.password)
+
     db_user = crud.get_user_by_email(db, email=user.email)
     if db_user and db_user.status:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -78,7 +110,6 @@ async def signup(
         id=db_user.id,
         name=db_user.name,
         email=db_user.email,
-        country=db_user.country
     )
     return {
         'user': result,
@@ -126,7 +157,6 @@ async def check_code(
         id=user.id,
         name=user.name,
         email=user.email,
-        country=user.country,
         avatar=src,
         token=token.token
     )
@@ -158,14 +188,16 @@ async def login(
         id=db_user.id,
         name=db_user.name,
         email=db_user.email,
-        country=db_user.country,
         avatar=src,
         token=token.token
     )
     return result
 
 
-async def check_token(db, auth):
+async def check_token(
+        auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
+        db: Annotated[Session, Depends(get_db)]
+):
     if not auth or not auth.credentials:
         raise HTTPException(
             status_code=401,
@@ -182,10 +214,9 @@ async def check_token(db, auth):
 
 @app.post("/logout/")
 async def logout(
-        auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
+        token: Annotated[models.Token, Depends(check_token)],
         db: Annotated[Session, Depends(get_db)],
 ):
-    token = await check_token(db, auth)
     crud.remove_token(db, token)
     return {"status": "ok"}
 
@@ -223,12 +254,9 @@ async def set_avatar(
 
 @app.post("/change-avatar/", status_code=200, tags=["user_info"])
 async def change_avatar(
-        auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
-        db: Annotated[Session, Depends(get_db)],
+        token: Annotated[models.Token, Depends(check_token)],
         image: UploadFile
 ):
-    token = await check_token(db, auth)
-
     content_type = image.headers.get('content-type')
     if content_type not in ['image/jpeg', 'image/png']:
         raise HTTPException(
@@ -250,11 +278,8 @@ async def change_avatar(
 
 @app.get("/get-avatar/", status_code=200, tags=["user_info"])
 async def get_avatar(
-        auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
-        db: Annotated[Session, Depends(get_db)],
+        token: Annotated[models.Token, Depends(check_token)]
 ):
-    token = await check_token(db, auth)
-
     src = minio.get_url("avatars", f"{token.user}.png")
     if not src:
         src = minio.get_url("avatars", f"user.png")
@@ -264,11 +289,9 @@ async def get_avatar(
 
 @app.get("/get-me/", status_code=200, response_model=schemas.UserResult, tags=["user_info"])
 async def get_me(
-        auth: Annotated[HTTPAuthorizationCredentials, Depends(get_bearer_token)],
+        token: Annotated[models.Token, Depends(check_token)],
         db: Annotated[Session, Depends(get_db)]
 ):
-    token = await check_token(db, auth)
-
     user = crud.get_user_by_id(db=db, user_id=token.user)
     if not user:
         raise HTTPException(status_code=400, detail="User not found")
@@ -281,11 +304,72 @@ async def get_me(
         id=user.id,
         name=user.name,
         email=user.email,
-        country=user.country,
         avatar=src
     )
 
     return result
+
+
+@app.post("/delete-me/request", status_code=200, tags=["user"])
+async def delete_me_request(
+        token: Annotated[models.Token, Depends(check_token)],
+        db: Annotated[Session, Depends(get_db)]
+):
+    user = crud.get_user_by_id(db=db, user_id=token.user)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    codeObj = crud.get_code(db=db, user_id=user.id, step="deleteme")
+    if codeObj:
+        t = 60 - int(datetime.datetime.now().timestamp() - codeObj.update_on.timestamp())
+        if t >= 0:
+            raise HTTPException(status_code=429, detail=f"Please wait [{t}] seconds")
+        else:
+            crud.update_code(db=db, code=codeObj)
+    else:
+        codeObj = crud.create_code(db=db, user_id=user.id, step="deleteme")
+        if not codeObj:
+            raise HTTPException(status_code=400, detail="Create code error")
+
+    try:
+        send_email([user.email], code=str(codeObj.code), theme="Сброс пароля", text="Сброс пароля")
+    except Exception as e:
+        print(e)
+
+    return {
+        "status": "ok",
+        "command": "delete-me-check-code"
+    }
+
+
+@app.post("/delete-me/confirm", status_code=200, tags=["user"])
+async def delete_me_confirm(
+        o: schemas.ConfirmCode,
+        token: Annotated[models.Token, Depends(check_token)],
+        db: Annotated[Session, Depends(get_db)]
+):
+    code = o.code
+    user = crud.get_user_by_id(db=db, user_id=token.user)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    codeObj = crud.get_code(db=db, user_id=user.id, step="deleteme")
+    if not codeObj:
+        raise HTTPException(status_code=400, detail="Code not found")
+
+    if int(datetime.datetime.now().timestamp() - codeObj.update_on.timestamp()) > 300:
+        crud.remove_code(db, codeObj)
+        raise HTTPException(status_code=410, detail="Code is outdated")
+
+    verified = crud.verify_code(db=db, codeObj=codeObj, code=code)
+    if not verified:
+        raise HTTPException(status_code=400, detail="Incorrect code")
+
+    crud.delete_user(db=db, user=user)
+
+    return {
+        "status": "ok",
+    }
 
 
 @app.post("/forgot-password/request", status_code=200, tags=["forgot_password"])
@@ -322,7 +406,7 @@ async def forgot_password_request(
 
 
 @app.post("/forgot-password/confirm", status_code=200, tags=["forgot_password"])
-async def forgot_password_request(
+async def forgot_password_confirm(
         o: schemas.ForgotPasswordCheckCode,
         db: Annotated[Session, Depends(get_db)],
 ):
@@ -358,7 +442,7 @@ async def forgot_password_request(
 
 
 @app.post("/forgot-password/set", status_code=200, tags=["forgot_password"])
-async def forgot_password_request(
+async def forgot_password_set(
         o: schemas.ForgotPasswordSet,
         db: Annotated[Session, Depends(get_db)],
 ):
@@ -381,3 +465,84 @@ async def forgot_password_request(
         "status": "ok",
         "command": "login"
     }
+
+
+@app.post("/change-info/request", status_code=200, tags=["change_info"])
+async def change_info_request(
+        o: schemas.ChangeInfo,
+        token: Annotated[models.Token, Depends(check_token)],
+        db: Annotated[Session, Depends(get_db)],
+):
+    name = o.name.strip()
+    email = o.email.strip()
+    db_user = crud.get_user_by_id(db=db, user_id=token.user)
+    if not db_user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    if email == db_user.email:
+        crud.user_update_name(db=db, user=db_user, name=name)
+        return {
+            "status": "ok",
+            "command": "get-me",
+        }
+
+    if crud.get_user_by_email(db=db, email=email):
+        raise HTTPException(status_code=400, detail="Email already in use")
+
+    codeObj = crud.get_code(db=db, user_id=db_user.id, step="changeemail")
+    if codeObj:
+        t = 60 - int(datetime.datetime.now().timestamp() - codeObj.update_on.timestamp())
+        if t >= 0:
+            raise HTTPException(status_code=429, detail=f"Please wait [{t}] seconds")
+        else:
+            crud.update_code(db=db, code=codeObj)
+    else:
+        codeObj = crud.create_code(db=db, user_id=db_user.id, step="changeemail")
+        if not codeObj:
+            raise HTTPException(status_code=400, detail="Create code error")
+
+    try:
+        send_email([email], code=str(codeObj.code), theme="Изменение почты", text="Изменение почты")
+    except Exception as e:
+        print(e)
+
+    return {
+        "status": "ok",
+        "command": "change-info-confirm"
+    }
+
+
+@app.post("/change-info/confirm", status_code=200, tags=["change_info"])
+async def change_info_confirm(
+        o: schemas.ChangeInfoConfirm,
+        token: Annotated[models.Token, Depends(check_token)],
+        db: Annotated[Session, Depends(get_db)],
+):
+    code = o.code
+    email = o.email.strip()
+
+    user = crud.get_user_by_id(db=db, user_id=token.user)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    codeObj = crud.get_code(db=db, user_id=user.id, step="changeemail")
+    if not codeObj:
+        raise HTTPException(status_code=400, detail="Code not found")
+
+    if int(datetime.datetime.now().timestamp() - codeObj.update_on.timestamp()) > 300:
+        crud.remove_code(db, codeObj)
+        raise HTTPException(status_code=410, detail="Code is outdated")
+
+    verified = crud.verify_code(db=db, codeObj=codeObj, code=code)
+    if not verified:
+        raise HTTPException(status_code=400, detail="Incorrect code")
+
+    crud.user_update_email(db=db, user=user, email=email)
+
+    return {
+        "status": "ok",
+        "command": "login"
+    }
+
+
+app.include_router(api_router, dependencies=[Depends(check_token)])
