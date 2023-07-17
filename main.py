@@ -332,7 +332,7 @@ async def delete_me_request(
             raise HTTPException(status_code=400, detail="Create code error")
 
     try:
-        send_email([user.email], code=str(codeObj.code), theme="Сброс пароля", text="Сброс пароля")
+        send_email([user.email], code=str(codeObj.code), theme="Удаление профиля", text="Удаление профиля")
     except Exception as e:
         print(e)
 
